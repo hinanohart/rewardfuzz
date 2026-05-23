@@ -105,8 +105,8 @@ Every number here is produced by `rewardfuzz bench` on the bundled **ground-trut
 reproduced in CI. It is deterministic and runs with no LLM and no network. This is a regression /
 sanity benchmark on rewardfuzz's *own* labelled corpus — not an independent third-party evaluation.
 
-Corpus: **8 reward functions** (5 deliberately gameable, 3 hardened), **34 labelled candidates**
-(8 hack, 26 honest) across the numeric, code, and RLVR domains.
+Corpus: **8 reward functions** (5 deliberately gameable, 3 hardened), **59 labelled candidates**
+(16 hack, 43 honest) across the numeric, code, and RLVR domains.
 
 **Detection** — the structural judge vs the ground-truth labels:
 
@@ -115,9 +115,9 @@ Corpus: **8 reward functions** (5 deliberately gameable, 3 hardened), **34 label
 | precision | **1.00** |
 | recall | **1.00** |
 | F1 | **1.00** |
-| confusion | tp=8, fp=0, fn=0, tn=26 |
+| confusion | tp=16, fp=0, fn=0, tn=43 |
 
-Per domain: code (n=14), numeric (n=12), rlvr (n=8) — all precision = recall = 1.00.
+Per domain: numeric (n=23), code (n=22), rlvr (n=14) — all precision = recall = 1.00.
 
 **Discovery** — a full audit per target:
 
@@ -134,7 +134,9 @@ Per domain: code (n=14), numeric (n=12), rlvr (n=8) — all precision = recall =
 | rlvr.contains_substring | 22.6 | LOW RISK |
 | *(3 hardened targets)* | 0.0 | MINIMAL RISK |
 
-65 tests, 87% line coverage.
+65 tests, 87% line coverage. (CI runs `rewardfuzz bench --quick`, which uses a smaller per-strategy
+budget, so a budget-sensitive target's exact Hackability can differ by ~1 point from the full run
+above; precision/recall and the discovery rate are unaffected.)
 
 ## Optional LLM features (experimental)
 
@@ -174,6 +176,8 @@ models: `Qwen/Qwen2.5-Coder-32B-Instruct` (synthesis), `Qwen/Qwen3-32B` (judge).
 - Coverage-guided (Atheris) and property-based (Hypothesis) strategies.
 - `shinka` adapter (ShinkaEvolve `evaluate.py`) and a generic `cli` adapter.
 - A larger, domain-diverse corpus.
+- Calibrated robustness scoring (`corpus/calibration.json`); today the shrink factor is a fixed
+  formula rather than calibrated against the corpus.
 
 ## License
 
