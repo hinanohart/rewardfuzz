@@ -53,6 +53,14 @@ class BaseAdapter:
         return result
 
     def evaluate_held_out(self, candidate: Candidate) -> RewardResult | None:
+        """Score ``candidate`` on the held-out reward variant, or ``None`` if there is none.
+
+        Only the held-out *score* feeds the ``heldout_gap`` invariant; side-effect signals come
+        from the main :meth:`evaluate` run (the held-out variant is the same function on different
+        inputs, so re-capturing its side effects would be redundant). The ``crashed`` flag is
+        preserved so the judge can distinguish a genuine low score from a held-out failure.
+        """
+
         if self.target.held_out_fn is None:
             return None
         held_fn = self.target.held_out_fn
@@ -61,6 +69,25 @@ class BaseAdapter:
             timeout_s=self.timeout_s,
         )
         return self._normalise(raw, crashed=se.exception is not None or se.timed_out)
+
+    def evaluate_with_held_out(
+        self, candidate: Candidate
+    ) -> tuple[RewardResult, RewardResult | None]:
+        """Evaluate the main reward and (if any) the held-out variant, returning both.
+
+        The held-out score *and* its ``crashed`` flag are attached to ``result.metrics`` here, in
+        one place, so every caller (the audit loop and the benchmark) feeds the structural judge a
+        consistent view and the two code paths cannot drift.
+        """
+
+        result = self.evaluate(candidate)
+        held = self.evaluate_held_out(candidate)
+        if held is not None:
+            result.metrics["held_out_score"] = held.score
+            # A held-out evaluation that itself crashed is coerced to a finite score but is not
+            # evidence of memorisation; the judge skips the gap test when this is set.
+            result.metrics["held_out_crashed"] = held.crashed
+        return result, held
 
     # -- normalisation -------------------------------------------------------
     def _normalise(self, raw: Any, *, crashed: bool) -> RewardResult:

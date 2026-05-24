@@ -134,7 +134,7 @@ Per domain: numeric (n=23), code (n=22), rlvr (n=14) — all precision = recall 
 | rlvr.contains_substring | 22.6 | LOW RISK |
 | *(3 hardened targets)* | 0.0 | MINIMAL RISK |
 
-65 tests, 87% line coverage. (CI runs `rewardfuzz bench --quick`, which uses a smaller per-strategy
+74 tests, 88% line coverage. (CI runs `rewardfuzz bench --quick`, which uses a smaller per-strategy
 budget, so a budget-sensitive target's exact Hackability can differ by ~1 point from the full run
 above; precision/recall and the discovery rate are unaffected.)
 
@@ -156,6 +156,10 @@ models: `Qwen/Qwen2.5-Coder-32B-Instruct` (synthesis), `Qwen/Qwen3-32B` (judge).
   network namespace) is on the roadmap.
 - The `degenerate_high` heuristic assumes the task requires real computation; a task whose correct
   answer genuinely is a constant could be mis-flagged.
+- The `heldout_gap` invariant assumes the held-out function is a *semantically-equivalent* split of
+  the same task. A held-out function that is merely stricter, differently scaled, or buggy could
+  make honest high-scoring candidates look over-fit. (A held-out evaluation that *crashes* is not
+  counted as a gap.)
 - The bundled corpus is small and is rewardfuzz's own ground truth, so the perfect detection score
   reflects internal consistency, not a third-party benchmark. Treat Hackability as a comparative
   signal between reward functions, not an absolute guarantee.

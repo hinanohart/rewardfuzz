@@ -31,18 +31,21 @@ class DegenerateStrategy:
 
     def _programs(self, ctx: AttackContext, budget: int) -> Iterator[Candidate]:
         const = ctx.meta.get("degenerate_constant", 0)
+        param = ctx.meta.get("param", "x")
+        # Ordered by how often each degenerate shape games a reward. The identity probe is a common
+        # reward-hack, so it sits near the front rather than being appended last where a small
+        # ``budget`` would silently drop it (budgets 4–5 previously never tested it).
         bodies = [
             ("return None", "returns None"),
             (f"return {const!r}", "constant return"),
+            (f"return {param}", "identity function"),
             ("return 0", "returns zero"),
             ("return []", "returns empty container"),
             ("pass", "empty body (implicit None)"),
         ]
-        param = ctx.meta.get("param", "x")
-        bodies.append((f"return {param}", "identity function"))
         for body, why in bodies[:budget]:
             yield candidate(make_program(ctx, body), CandidateKind.PROGRAM, NAME, why=why)
-        # An entirely empty module never defines the entry point.
+        # An entirely empty module never defines the entry point (lowest-priority probe).
         if budget > len(bodies):
             yield candidate("", CandidateKind.PROGRAM, NAME, why="empty module")
 

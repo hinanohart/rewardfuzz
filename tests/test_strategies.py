@@ -61,3 +61,12 @@ def test_strategies_are_deterministic():
     a = [c.payload for c in collect("degenerate", ctx(CandidateKind.PROGRAM))]
     b = [c.payload for c in collect("degenerate", ctx(CandidateKind.PROGRAM))]
     assert a == b
+
+
+def test_degenerate_includes_identity_at_small_budget():
+    # Regression: the identity probe used to be appended last, so budgets 4-5 silently dropped it.
+    # It is a common reward-hack and must be exercised at every non-trivial budget.
+    c = ctx(CandidateKind.PROGRAM)
+    for budget in (4, 5, 6, 8):
+        whys = {cand.meta.get("why") for cand in collect("degenerate", c, budget=budget)}
+        assert "identity function" in whys, (budget, whys)

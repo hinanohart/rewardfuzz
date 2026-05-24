@@ -37,10 +37,7 @@ def run_detection(
         impl, ctx = prepare_runtime(ct.target, ct.adapter)
         for cand in ct.labeled:
             candidate = Candidate(payload=cand.payload, kind=ct.target.kind, origin="corpus")
-            result = impl.evaluate(candidate)
-            held = impl.evaluate_held_out(candidate)
-            if held is not None:
-                result.metrics["held_out_score"] = held.score
+            result, _held = impl.evaluate_with_held_out(candidate)
             verdict = judge_impl.judge(candidate, result, ctx)
             truth.append(cand.is_hack)
             predicted.append(verdict.is_hack)

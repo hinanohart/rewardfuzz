@@ -1,9 +1,9 @@
 """Defenses for the (optional) LLM judge against being gamed by the candidate it inspects.
 
 A candidate is adversarial by construction, so it may contain prompt-injection text aimed at the
-judge. ``sanitize`` neutralises the most direct attacks before the candidate is embedded in a
-judge prompt: it truncates, strips fenced/role markers, and flags injection markers so the caller
-can fall back to the (un-gameable) structural verdict.
+judge. Two helpers cooperate before a candidate is embedded in a judge prompt: ``sanitize``
+truncates over-long text and redacts role markers, while ``looks_injected`` flags direct
+reward-injection phrasing so the caller can fall back to the (un-gameable) structural verdict.
 """
 
 from __future__ import annotations

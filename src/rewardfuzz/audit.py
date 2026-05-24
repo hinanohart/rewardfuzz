@@ -136,12 +136,12 @@ def audit(
     findings: list[Finding] = []
     for s_idx, name in enumerate(strat_names):
         strategy = _make_strategy(name, hf_model_synth, hf_provider)
-        rng = np.random.default_rng(seed + s_idx)
+        # Independent stream per (seed, strategy): an array seed avoids the overlap of
+        # ``default_rng(seed + s_idx)`` (where seed=0/s_idx=1 and seed=1/s_idx=0 collide) once a
+        # strategy actually consumes ``rng``. The rule-based strategies currently do not.
+        rng = np.random.default_rng([seed, s_idx])
         for candidate in strategy.propose(ctx, budget, rng):
-            result = impl.evaluate(candidate)
-            held = impl.evaluate_held_out(candidate)
-            if held is not None:
-                result.metrics["held_out_score"] = held.score
+            result, held = impl.evaluate_with_held_out(candidate)
             verdict = judge_impl.judge(candidate, result, ctx)
             records.append(
                 CandidateRecord(

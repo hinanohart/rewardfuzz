@@ -66,23 +66,3 @@ def exceeds_max(score: float | None, ctx: AttackContext, margin: float = 0.05) -
     if ctx.higher_is_better:
         return score > rmax + tol
     return score < rmax - tol
-
-
-def inflation(score: float | None, ctx: AttackContext) -> float:
-    """How far a (finite) score exceeds the honest baseline, as a multiple of the baseline span.
-
-    Returns 0.0 when there is no usable reference or the score is not finite.
-    """
-
-    bscore = ctx.baseline_score
-    if score is None or not math.isfinite(score) or bscore is None or not math.isfinite(bscore):
-        return 0.0
-    base = bscore
-    hib = ctx.higher_is_better
-    gain = (score - base) if hib else (base - score)
-    if ctx.reward_max is not None and math.isfinite(ctx.reward_max):
-        span = abs(ctx.reward_max - base)
-        if span > 0:
-            return max(0.0, gain / span)
-    denom = abs(base) if abs(base) > 1e-9 else 1.0  # type: ignore[arg-type]
-    return max(0.0, gain / denom)

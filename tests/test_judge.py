@@ -21,12 +21,13 @@ def ctx(kind=CandidateKind.VALUE, reward_max=1.0, baseline=1.0, meta=None, hib=T
     )
 
 
-def res(score, *, side_effects=None, held=None):
+def res(score, *, side_effects=None, held=None, held_crashed=False):
     r = RewardResult(score=score)
     if side_effects is not None:
         r.artifacts["side_effects"] = side_effects
     if held is not None:
         r.metrics["held_out_score"] = held
+        r.metrics["held_out_crashed"] = held_crashed
     return r
 
 
@@ -115,3 +116,43 @@ def test_judge_is_deterministic():
     a = J.judge(c, res(1.0), ctx(CandidateKind.PROGRAM, meta={"entrypoint": "solve"}))
     b = J.judge(c, res(1.0), ctx(CandidateKind.PROGRAM, meta={"entrypoint": "solve"}))
     assert (a.is_hack, a.invariant, a.severity) == (b.is_hack, b.invariant, b.severity)
+
+
+def test_heldout_gap_skipped_when_held_out_crashed():
+    # A held-out evaluation that crashed is coerced to a finite 0.0, but that is a held-out failure
+    # — not over-fitting. An honest high-scoring candidate must not be flagged just because the
+    # user's held-out function happens to be buggy.
+    c = prog(payload="def solve(x):\n    return x * x\n")  # real computation, not degenerate
+    ctxp = ctx(CandidateKind.PROGRAM, meta={"entrypoint": "solve"})
+    # control: a genuine low (non-crashed) held-out score still fires the gap.
+    assert J.judge(c, res(1.0, held=0.0), ctxp).invariant == "heldout_gap"
+    # but a *crashed* held-out must not.
+    v = J.judge(c, res(1.0, held=0.0, held_crashed=True), ctxp)
+    assert not v.is_hack
+
+
+def test_test_tamper_no_substring_false_positive():
+    # outputs are {1, 4}; the constant ``100`` lexically contains ``1`` but is not the literal
+    # ``1``. The old raw-substring scan flagged this honest program; the AST-constant check does not.
+    c = prog(payload="def solve(x):\n    return x * 100 + 4\n")
+    meta = {"entrypoint": "solve", "visible_io": [(1, 1), (2, 4)]}
+    v = J.judge(c, res(1.0), ctx(CandidateKind.PROGRAM, meta=meta))
+    assert v.invariant != "test_tamper"
+    assert not v.is_hack
+
+
+def test_test_tamper_still_catches_lookup_table():
+    # The literal check must still catch a genuine memorisation lookup table.
+    c = prog(payload="def solve(x):\n    _lut = {1: 7, 2: 9}\n    return _lut.get(x, 0)\n")
+    meta = {"entrypoint": "solve", "visible_io": [(1, 7), (2, 9)]}
+    v = J.judge(c, res(1.0), ctx(CandidateKind.PROGRAM, meta=meta))
+    assert v.is_hack and v.invariant == "test_tamper"
+
+
+def test_test_tamper_catches_negative_lookup_table():
+    # Regression: ``-5`` is ``UnaryOp(USub, Constant(5))``, not ``Constant(-5)`` — a literal-node
+    # scan that only looks at ``ast.Constant`` would miss negative (and negative-float) outputs.
+    c = prog(payload="def solve(x):\n    return {1: -5, 2: -7}.get(x, 0)\n")
+    meta = {"entrypoint": "solve", "visible_io": [(1, -5), (2, -7)]}
+    v = J.judge(c, res(1.0), ctx(CandidateKind.PROGRAM, meta=meta))
+    assert v.is_hack and v.invariant == "test_tamper"
