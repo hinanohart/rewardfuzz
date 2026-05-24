@@ -19,10 +19,13 @@ release; see the README "Threat model & limitations" section.
 
 from __future__ import annotations
 
+import builtins
 import contextlib
 import io
 import os
 import signal
+import sys
+import tempfile
 import threading
 import time
 from collections.abc import Callable
@@ -87,6 +90,39 @@ def _alarm(timeout_s: float):
         signal.signal(signal.SIGALRM, old)
 
 
+def _restore_builtins(snapshot: dict[str, Any]) -> None:
+    """Undo any mutation a candidate made to the ``builtins`` namespace.
+
+    Drops names the candidate added and re-binds any it overwrote.  Must be called *before* any
+    further use of the standard library in the cleanup path: a candidate that overwrote a builtin
+    such as ``len`` would otherwise break ``glob``/``re`` (and hence the file scan below).  Uses
+    only dict-view set algebra and dict methods — all resolved on the type via C slots, never
+    through the namespace being repaired — so it works even if the candidate overwrote
+    ``builtins.list`` (or any other builtin).
+    """
+
+    for key in builtins.__dict__.keys() - snapshot.keys():  # names the candidate added
+        del builtins.__dict__[key]
+    for key, val in snapshot.items():
+        if builtins.__dict__.get(key) is not val:
+            builtins.__dict__[key] = val
+
+
+def _restore_cwd(preferred: str) -> None:
+    """Return to ``preferred``; if it no longer exists, fall back to a valid directory.
+
+    A candidate that deletes the original working directory must not strand the process in a
+    non-existent cwd — the next ``os.getcwd()`` would raise and crash the audit loop.
+    """
+
+    for target in (preferred, tempfile.gettempdir(), os.sep):
+        try:
+            os.chdir(target)
+            return
+        except OSError:
+            continue
+
+
 def run_sandboxed(
     thunk: Callable[[], Any],
     *,
@@ -99,12 +135,16 @@ def run_sandboxed(
     candidate is a finding, not an error for the caller).
     """
 
-    import sys
-    import tempfile
-
     se = SideEffects()
     env_before = dict(os.environ)
-    cwd_before = os.getcwd()
+    builtins_before = dict(builtins.__dict__)
+    try:
+        cwd_before = os.getcwd()
+    except OSError:
+        # Entered while the cwd no longer exists (e.g. a prior candidate deleted it). Recover to a
+        # valid directory so the audit loop self-heals rather than crashing here.
+        cwd_before = tempfile.gettempdir()
+        os.chdir(cwd_before)
     out_buf, err_buf = io.StringIO(), io.StringIO()
     result: Any = None
 
@@ -117,43 +157,67 @@ def run_sandboxed(
         se.exit_code = code
         raise SystemExit(code)
 
-    with tempfile.TemporaryDirectory(prefix="rewardfuzz_sbx_") as tmp:
-        start = time.perf_counter()
-        sys.exit = _exit_wrapper  # type: ignore[assignment]
-        try:
-            os.chdir(tmp)
-            with contextlib.redirect_stdout(out_buf), contextlib.redirect_stderr(err_buf):
-                with _alarm(timeout_s):
-                    result = thunk()
-        except SandboxTimeout:
-            se.timed_out = True
-        except SystemExit as exc:
-            se.exit_attempted = True
-            se.exit_code = exc.code
-        except BaseException as exc:  # noqa: BLE001 - we report, never propagate
-            se.exception = f"{type(exc).__name__}: {exc}"
-        finally:
-            sys.exit = real_exit
-            se.wall_time_s = time.perf_counter() - start
+    try:
+        # ``ignore_cleanup_errors`` keeps temp-dir teardown from raising out of the sandbox (e.g.
+        # a candidate that left a background writer), preserving the never-re-raise contract.
+        with tempfile.TemporaryDirectory(
+            prefix="rewardfuzz_sbx_", ignore_cleanup_errors=True
+        ) as tmp:
+            start = time.perf_counter()
+            sys.exit = _exit_wrapper  # type: ignore[assignment]
             try:
-                created = sorted(
-                    str(p.relative_to(tmp)) for p in Path(tmp).rglob("*") if p.is_file()
-                )
-            except OSError:
-                created = []
-            se.files_created = created
-            os.chdir(cwd_before)
-
-    # Detect environment mutations that escaped the sandbox.
-    for key, val in os.environ.items():
-        if env_before.get(key) != val:
-            se.env_mutated[key] = "<changed>"
-    for key in env_before:
-        if key not in os.environ:
-            se.env_mutated[key] = "<deleted>"
-    # Restore environment so audits never leak between candidates.
-    os.environ.clear()
-    os.environ.update(env_before)
+                os.chdir(tmp)
+                with contextlib.redirect_stdout(out_buf), contextlib.redirect_stderr(err_buf):
+                    with _alarm(timeout_s):
+                        result = thunk()
+            except SandboxTimeout:
+                se.timed_out = True
+            except SystemExit as exc:
+                se.exit_attempted = True
+                se.exit_code = exc.code
+            except BaseException as exc:  # noqa: BLE001 - we report, never propagate
+                se.exception = f"{type(exc).__name__}: {exc}"
+            finally:
+                sys.exit = real_exit
+                se.wall_time_s = time.perf_counter() - start
+                # Cleanup must never re-raise (the contract above). The whole block is guarded so
+                # that even a candidate which sabotages this module's globals cannot escape; the
+                # outer finally is the second line of defence.
+                try:
+                    # Restore builtins FIRST: the file scan below goes through glob -> re, which
+                    # malfunctions if the candidate overwrote a builtin such as ``len``.
+                    _restore_builtins(builtins_before)
+                    try:
+                        created = sorted(
+                            str(p.relative_to(tmp)) for p in Path(tmp).rglob("*") if p.is_file()
+                        )
+                    except OSError:
+                        created = []
+                    se.files_created = created
+                    # Leave the temp dir before TemporaryDirectory tears it down.
+                    _restore_cwd(cwd_before)
+                except BaseException:  # noqa: BLE001 - cleanup is best-effort, never re-raised
+                    pass
+    finally:
+        # Always runs — even if the thunk or the temp-dir teardown raised — so a candidate can
+        # never leak host state into the next audit (the isolation contract in this module's
+        # docstring). Restore builtins FIRST so the rest of this block runs against a sane
+        # namespace; then detect+undo env, then cwd. All steps are idempotent with the inner
+        # finally (which already restored these on the normal path), and the block is guarded so
+        # cleanup can never re-raise out of run_sandboxed.
+        try:
+            _restore_builtins(builtins_before)
+            for key, val in os.environ.items():
+                if env_before.get(key) != val:
+                    se.env_mutated[key] = "<changed>"
+            for key in env_before:
+                if key not in os.environ:
+                    se.env_mutated[key] = "<deleted>"
+            os.environ.clear()
+            os.environ.update(env_before)
+            _restore_cwd(cwd_before)
+        except BaseException:  # noqa: BLE001 - cleanup is best-effort, never re-raised
+            pass
 
     se.stdout = out_buf.getvalue()
     se.stderr = err_buf.getvalue()

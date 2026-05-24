@@ -6,6 +6,9 @@ yields nothing (the audit silently continues with the deterministic strategies).
 
 This strategy is non-deterministic by nature and is therefore never part of the CI gate; it is an
 exploratory amplifier on top of the deterministic core.
+
+It currently runs as a standalone generator. Feeding LLM-found candidates back as seeds for the
+rule-based strategies (a hybrid mode) is a planned enhancement, not yet implemented.
 """
 
 from __future__ import annotations
@@ -36,6 +39,7 @@ class LLMSpecGamingStrategy:
     def __init__(self, model: str = _DEFAULT_MODEL, *, provider: str = "auto") -> None:
         self.model = model
         self.provider = provider
+        self.errors: list[str] = []
 
     def propose(self, ctx: AttackContext, budget: int, rng: Any) -> Iterator[Candidate]:
         try:
@@ -54,7 +58,7 @@ class LLMSpecGamingStrategy:
             try:
                 raw = client.chat(SPEC_GAMING_SYSTEM, prompt, seed=i)
             except Exception as exc:  # noqa: BLE001 - network/provider errors are non-fatal
-                ctx.meta.setdefault("llm_errors", []).append(str(exc))
+                self.errors.append(str(exc))  # recorded on the strategy, not the shared target meta
                 return
             payload: Any = _extract(raw)
             if kind == CandidateKind.VALUE:

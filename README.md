@@ -175,6 +175,9 @@ models: `Qwen/Qwen2.5-Coder-32B-Instruct` (synthesis), `Qwen/Qwen3-32B` (judge).
 - Subprocess + `setrlimit` OS-level sandbox (`[fuzz]` extra).
 - Coverage-guided (Atheris) and property-based (Hypothesis) strategies.
 - `shinka` adapter (ShinkaEvolve `evaluate.py`) and a generic `cli` adapter.
+- Multi-argument program candidates and an AlphaEvolve-style matrix-multiplication example. The
+  bundled `code.visible_only` target already demonstrates the same exploit class — *memorise the
+  visible benchmark, collapse on held-out inputs* — for single-argument programs.
 - A larger, domain-diverse corpus.
 - Calibrated robustness scoring (`corpus/calibration.json`); today the shrink factor is a fixed
   formula rather than calibrated against the corpus.
