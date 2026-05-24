@@ -11,10 +11,14 @@ signals that the structural judge relies on:
 * uncaught exceptions, and
 * wall-clock timeouts (hard interrupt via ``SIGALRM`` on the main thread of POSIX systems).
 
-This is deliberately an *in-process* sandbox: it is enough to detect the side-effect classes
-that game reward functions, and it keeps the audit loop fast and dependency-free.  Full OS-level
-isolation (subprocess + ``resource.setrlimit`` + network namespace) is tracked for a later
-release; see the README "Threat model & limitations" section.
+This context itself runs in-process: it is enough to detect the side-effect classes that game
+reward functions, and it keeps the audit loop fast and dependency-free.  Untrusted *program*
+candidates (which an LLM may author) are not run here directly — they are executed out-of-process
+by ``synth.exec_program`` (subprocess + AST pre-scan + scrubbed env + ``resource.setrlimit``); the
+exit signal from such a child is bridged back into the ``SideEffects`` below via
+``collect_child_effects``, and any files it writes land in this context's temp dir and are picked
+up by the file scan.  This is not a hard security boundary (no network namespace / container); see
+the README "Threat model & limitations" section.
 """
 
 from __future__ import annotations
@@ -135,6 +139,10 @@ def run_sandboxed(
     candidate is a finding, not an error for the caller).
     """
 
+    # Defer the import so the sandbox keeps no hard load-time dependency on the program-execution
+    # bridge (and to avoid any import-order coupling between the two synth modules).
+    from .exec_program import collect_child_effects
+
     se = SideEffects()
     env_before = dict(os.environ)
     builtins_before = dict(builtins.__dict__)
@@ -167,9 +175,13 @@ def run_sandboxed(
             sys.exit = _exit_wrapper  # type: ignore[assignment]
             try:
                 os.chdir(tmp)
-                with contextlib.redirect_stdout(out_buf), contextlib.redirect_stderr(err_buf):
-                    with _alarm(timeout_s):
-                        result = thunk()
+                # ``collect_child_effects`` captures side effects produced by candidate code run
+                # out-of-process (e.g. a ``sys.exit`` inside a subprocess-executed PROGRAM
+                # candidate) so they are merged into ``se`` below alongside the in-process signals.
+                with collect_child_effects() as child_effects:
+                    with contextlib.redirect_stdout(out_buf), contextlib.redirect_stderr(err_buf):
+                        with _alarm(timeout_s):
+                            result = thunk()
             except SandboxTimeout:
                 se.timed_out = True
             except SystemExit as exc:
@@ -180,6 +192,11 @@ def run_sandboxed(
             finally:
                 sys.exit = real_exit
                 se.wall_time_s = time.perf_counter() - start
+                # Merge any exit attempt observed in an out-of-process candidate child (the file
+                # writes such a child makes land in ``tmp`` and are picked up by the scan below).
+                if child_effects.get("exit_attempted") and not se.exit_attempted:
+                    se.exit_attempted = True
+                    se.exit_code = child_effects.get("exit_code")
                 # Cleanup must never re-raise (the contract above). The whole block is guarded so
                 # that even a candidate which sabotages this module's globals cannot escape; the
                 # outer finally is the second line of defence.

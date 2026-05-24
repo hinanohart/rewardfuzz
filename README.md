@@ -148,12 +148,23 @@ models: `Qwen/Qwen2.5-Coder-32B-Instruct` (synthesis), `Qwen/Qwen3-32B` (judge).
 
 ## Threat model & limitations
 
-- **In-process sandbox.** Candidate evaluations run in an instrumented in-process sandbox that
-  captures file writes, env mutations, `sys.exit`, exceptions, and wall-clock timeouts (hard
-  `SIGALRM` interrupt on POSIX). This is enough to detect the side-effect classes that game reward
-  functions, but it is **not** a security boundary against deliberately malicious code. Only audit
-  reward functions and candidates you trust. Full OS-level isolation (subprocess + `setrlimit` +
-  network namespace) is on the roadmap.
+- **Side-effect sandbox.** Candidate evaluations run in an instrumented sandbox that captures file
+  writes, env mutations, `sys.exit`, exceptions, and wall-clock timeouts (hard `SIGALRM` interrupt
+  on POSIX). This is enough to detect the side-effect classes that game reward functions.
+- **Out-of-process program execution.** `PROGRAM` candidates (the only ones that are *code*, and
+  the only ones an LLM authors under `--llm`) are executed in a separate child `subprocess` rather
+  than in the operator's process. Before it runs, the candidate source goes through a static AST
+  pre-scan that rejects egress / escape modules (`socket`, `subprocess`, `os`, `ctypes`,
+  `multiprocessing`, `urllib`/`http`, …) and introspection escapes (`__subclasses__`, `__globals__`,
+  `eval`/`exec`/`__import__`). The child receives a **scrubbed, allowlisted environment** with
+  credential-like variables (`HF_TOKEN`, `OPENAI_API_KEY`, `AWS_*`, …) removed, and POSIX resource
+  limits (CPU time, address space via `setrlimit`) are applied where available. This keeps the
+  candidate away from the operator process and its secrets and blocks the obvious egress imports.
+- **Not a hard security boundary.** There is still no network namespace and no OS container, the
+  AST pre-scan is best-effort, and value/response candidates and the user's *own* reward function
+  run in-process. Only audit reward functions and candidates you trust on a host where running
+  untrusted code is acceptable. A full OS-level isolation backend (network namespace / container)
+  is on the roadmap.
 - The `degenerate_high` heuristic assumes the task requires real computation; a task whose correct
   answer genuinely is a constant could be mis-flagged.
 - The `heldout_gap` invariant assumes the held-out function is a *semantically-equivalent* split of
@@ -176,7 +187,8 @@ models: `Qwen/Qwen2.5-Coder-32B-Instruct` (synthesis), `Qwen/Qwen3-32B` (judge).
 
 ## Roadmap
 
-- Subprocess + `setrlimit` OS-level sandbox (`[fuzz]` extra).
+- Stronger OS-level isolation backend (network namespace / container) for program candidates,
+  building on the existing subprocess + `setrlimit` + scrubbed-env executor.
 - Coverage-guided (Atheris) and property-based (Hypothesis) strategies.
 - `shinka` adapter (ShinkaEvolve `evaluate.py`) and a generic `cli` adapter.
 - Multi-argument program candidates and an AlphaEvolve-style matrix-multiplication example. The
