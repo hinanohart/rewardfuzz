@@ -5,7 +5,7 @@
 
 [![CI](https://github.com/hinanohart/rewardfuzz/actions/workflows/ci.yml/badge.svg)](https://github.com/hinanohart/rewardfuzz/actions/workflows/ci.yml)
 ![python](https://img.shields.io/badge/python-3.10%2B-blue)
-![license](https://img.shields.io/badge/license-Apache--2.0-green)
+![license](https://img.shields.io/badge/license-MIT-green)
 
 rewardfuzz takes a reward / fitness / verifier function — an OpenEvolve evaluator, an RLVR
 verifier, a fitness function for an evolutionary search, or any Python callable — and **attacks it
@@ -200,4 +200,4 @@ models: `Qwen/Qwen2.5-Coder-32B-Instruct` (synthesis), `Qwen/Qwen3-32B` (judge).
 
 ## License
 
-Apache-2.0. See [LICENSE](LICENSE).
+MIT. See [LICENSE](LICENSE).
