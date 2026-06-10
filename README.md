@@ -31,15 +31,9 @@ hour training a model that learns to game it.
 
 ## Architecture
 
-```mermaid
-flowchart TD
-    Target[Target reward fn] --> Adapter[Adapter<br>callable / openevolve / rlvr]
-    Adapter --> Strategies[Strategies<br>degenerate / numeric_exploit<br>test_tamper / side_effect<br>llm_specgaming optional]
-    Strategies --> Sandbox[Sandboxed eval<br>AST pre-scan + subprocess<br>scrubbed env + setrlimit]
-    Sandbox --> Judge[Judge<br>structural invariants<br>optional LLM ensemble]
-    Judge --> Scoring[Scoring<br>noisy-OR composite<br>bootstrap CI]
-    Scoring --> Report[AuditReport<br>Hackability score<br>Findings + Hardening tips]
-```
+<div align="center">
+  <img src="docs/architecture.png" alt="rewardfuzz architecture" width="840">
+</div>
 
 ---
 
@@ -211,3 +205,4 @@ models: `Qwen/Qwen2.5-Coder-32B-Instruct` (synthesis), `Qwen/Qwen3-32B` (judge).
 ## License
 
 MIT. See [LICENSE](LICENSE).
+

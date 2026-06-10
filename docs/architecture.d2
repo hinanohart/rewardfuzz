@@ -1,0 +1,49 @@
+direction: down
+explanation: |md
+  ### rewardfuzz
+  **Attack your reward function before it attacks your training run** — a preventive, a-priori auditor for reward / fitness / verifier functions.
+| {near: top-center}
+
+target: "① Target reward fn" {shape: oval; style: {fill: "#6366f1"; font-color: "#fff"; stroke: "#4338ca"; bold: true; font-size: 18}}
+
+adapter: "② Adapter\ncallable / openevolve / rlvr" {style: {fill: "#0ea5e9"; font-color: "#fff"; stroke: "#0369a1"; bold: true; font-size: 18}}
+
+strategies: "Attack Strategies" {
+  style: {fill: "#f0fdf4"; stroke: "#10b981"; font-color: "#065f46"; bold: true; font-size: 16}
+  s1: "③ degenerate"
+  s2: "③ numeric_exploit"
+  s3: "③ test_tamper"
+  s4: "③ side_effect"
+  s5: "③ llm_specgaming\n(optional)"
+  *.style.fill: "#dcfce7"; *.style.font-color: "#065f46"
+}
+
+sandbox: "④ Sandboxed eval\nAST pre-scan + subprocess\nscrubbed env + setrlimit" {style: {fill: "#0ea5e9"; font-color: "#fff"; stroke: "#0369a1"; bold: true}}
+
+judge: "⑤ Judge\nstructural invariants\noptional LLM ensemble" {style: {fill: "#fffbeb"; font-color: "#92400e"; stroke: "#f59e0b"; bold: true}}
+
+scoring: "⑥ Scoring\nnoisy-OR composite\nbootstrap CI" {style: {fill: "#0ea5e9"; font-color: "#fff"; stroke: "#0369a1"; bold: true}}
+
+report: "⑦ AuditReport\nHackability score\nFindings + Hardening tips" {shape: cylinder; style: {fill: "#fdf2f8"; font-color: "#9d174e"; stroke: "#ec4899"; bold: true}}
+
+target -> adapter: "① wrap"
+adapter -> strategies.s1: "② fuzz"
+adapter -> strategies.s2: "② fuzz"
+adapter -> strategies.s3: "② fuzz"
+adapter -> strategies.s4: "② fuzz"
+adapter -> strategies.s5: "② fuzz"
+strategies.s1 -> sandbox: "③ eval"
+strategies.s2 -> sandbox: "③ eval"
+strategies.s3 -> sandbox: "③ eval"
+strategies.s4 -> sandbox: "③ eval"
+strategies.s5 -> sandbox: "③ eval"
+sandbox -> judge: "④ judge"
+judge -> scoring: "⑤ score"
+scoring -> report: "⑥ report"
+
+legend: "Legend" {
+  near: bottom-center
+  style: {fill: "#f8fafc"; stroke: "#cbd5e1"; font-size: 13}
+  e: "● entry"; c: "● core"; p: "● strategy"; b: "● judge"; d: "● output"
+  e.style.font-color: "#4338ca"; c.style.font-color: "#0369a1"; p.style.font-color: "#10b981"; b.style.font-color: "#f59e0b"; d.style.font-color: "#ec4899"
+}
