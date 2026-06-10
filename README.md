@@ -144,7 +144,7 @@ Per domain: numeric (n=23), code (n=22), rlvr (n=14) — all precision = recall 
 | rlvr.contains_substring | 22.6 | LOW RISK |
 | *(3 hardened targets)* | 0.0 | MINIMAL RISK |
 
-74 tests, 88% line coverage. (CI runs `rewardfuzz bench --quick`, which uses a smaller per-strategy
+88 tests, 88% line coverage. (CI runs `rewardfuzz bench --quick`, which uses a smaller per-strategy
 budget, so a budget-sensitive target's exact Hackability can differ by ~1 point from the full run
 above; precision/recall and the discovery rate are unaffected.)
 
