@@ -29,6 +29,20 @@ hour training a model that learns to game it.
 
 ---
 
+## Architecture
+
+```mermaid
+flowchart TD
+    Target[Target reward fn] --> Adapter[Adapter\ncallable / openevolve / rlvr]
+    Adapter --> Strategies[Strategies\ndegenerate / numeric_exploit\ntest_tamper / side_effect\nllm_specgaming optional]
+    Strategies --> Sandbox[Sandboxed eval\nAST pre-scan + subprocess\nscrubbed env + setrlimit]
+    Sandbox --> Judge[Judge\nstructural invariants\noptional LLM ensemble]
+    Judge --> Scoring[Scoring\nnoisy-OR composite\nbootstrap CI]
+    Scoring --> Report[AuditReport\nHackability score\nFindings + Hardening tips]
+```
+
+---
+
 ## Install
 
 Not yet on PyPI — install from source:
@@ -78,10 +92,6 @@ rewardfuzz list-strategies
 ```
 
 ## How it works
-
-```
-target reward fn ──▶ adapter ──▶ strategies generate candidates ──▶ sandboxed eval ──▶ judge ──▶ score
-```
 
 - **Adapters** wrap a target into one interface: `callable` (any Python function), `openevolve`
   (`evaluate(program_path) -> metrics`), and `rlvr` (`verify(response) -> {0,1}`).
