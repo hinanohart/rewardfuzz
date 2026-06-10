@@ -33,12 +33,12 @@ hour training a model that learns to game it.
 
 ```mermaid
 flowchart TD
-    Target[Target reward fn] --> Adapter[Adapter\ncallable / openevolve / rlvr]
-    Adapter --> Strategies[Strategies\ndegenerate / numeric_exploit\ntest_tamper / side_effect\nllm_specgaming optional]
-    Strategies --> Sandbox[Sandboxed eval\nAST pre-scan + subprocess\nscrubbed env + setrlimit]
-    Sandbox --> Judge[Judge\nstructural invariants\noptional LLM ensemble]
-    Judge --> Scoring[Scoring\nnoisy-OR composite\nbootstrap CI]
-    Scoring --> Report[AuditReport\nHackability score\nFindings + Hardening tips]
+    Target[Target reward fn] --> Adapter[Adapter<br>callable / openevolve / rlvr]
+    Adapter --> Strategies[Strategies<br>degenerate / numeric_exploit<br>test_tamper / side_effect<br>llm_specgaming optional]
+    Strategies --> Sandbox[Sandboxed eval<br>AST pre-scan + subprocess<br>scrubbed env + setrlimit]
+    Sandbox --> Judge[Judge<br>structural invariants<br>optional LLM ensemble]
+    Judge --> Scoring[Scoring<br>noisy-OR composite<br>bootstrap CI]
+    Scoring --> Report[AuditReport<br>Hackability score<br>Findings + Hardening tips]
 ```
 
 ---
